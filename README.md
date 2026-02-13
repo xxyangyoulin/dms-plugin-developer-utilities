@@ -1,5 +1,7 @@
 # Developer Utilities for [DankMaterialShell](https://github.com/DankMaterialShell/DankMaterialShell)
 
+![Screenshot](assets/screenshot.png)
+
 Encoders, decoders, formatters and converters for developers.
 
 ## Features
