@@ -19,6 +19,7 @@ PluginComponent {
     property string statusMessage: ""
     property string inputText: ""
     property bool autoPaste: pluginData?.autoPaste ?? true
+    property bool autoCloseOnCopy: pluginData?.autoCloseOnCopy ?? false
     property int flashIndex: -1
     property int expandedCardIndex: -1
 
@@ -32,6 +33,8 @@ PluginComponent {
         enableNumber: pluginData?.enableNumber ?? true
     })
 
+    signal copyCompletedForClose()
+
     popoutHeight: parentScreen ? Math.floor(parentScreen.height * 0.8) : 600
 
     function copyResult(index) {
@@ -41,6 +44,9 @@ PluginComponent {
             clipboardHelper.copy()
             ToastService.showInfo(I18n.tr("Copied", "DeveloperUtilities") + ": " + root.conversionResults[index].label)
             root.flashIndex = index
+            if (root.autoCloseOnCopy) {
+                root.copyCompletedForClose()
+            }
         }
     }
 
@@ -146,6 +152,23 @@ PluginComponent {
             onIsPinnedChanged: {
                 if (parentPopout && 'backgroundInteractive' in parentPopout) {
                     parentPopout.backgroundInteractive = !isPinned
+                }
+            }
+
+            Connections {
+                target: root
+                function onCopyCompletedForClose() {
+                    closeDelayTimer.start()
+                }
+            }
+
+            Timer {
+                id: closeDelayTimer
+                interval: 150
+                onTriggered: {
+                    if (closePopout) {
+                        closePopout()
+                    }
                 }
             }
 
@@ -284,6 +307,9 @@ PluginComponent {
                                         clipboardHelper.copy()
                                         ToastService.showInfo(I18n.tr("Copied", "DeveloperUtilities"))
                                         copyCompleted()
+                                        if (root.autoCloseOnCopy) {
+                                            root.copyCompletedForClose()
+                                        }
                                     }
                                     onExpandRequested: {
                                         root.toggleExpand(cardLoader.index)

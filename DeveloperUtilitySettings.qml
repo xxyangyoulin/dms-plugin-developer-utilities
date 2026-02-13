@@ -38,6 +38,13 @@ PluginSettings {
         defaultValue: true
     }
 
+    ToggleSetting {
+        settingKey: "autoCloseOnCopy"
+        label: I18n.tr("Auto Close on Copy", "DeveloperUtilities")
+        description: I18n.tr("Automatically close popup after copying result", "DeveloperUtilities")
+        defaultValue: false
+    }
+
     StyledRect {
         width: parent.width
         height: featuresColumn.implicitHeight + Theme.spacingL * 2
