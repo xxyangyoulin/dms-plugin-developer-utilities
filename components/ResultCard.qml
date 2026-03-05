@@ -370,7 +370,7 @@ Rectangle {
                     selectByMouse: true
                     wrapMode: TextEdit.WrapAnywhere
                     font.family: "Monospace"
-                    font.pixelSize: (root.resultType === "Color" || root.resultType === "Timestamp") ? Theme.fontSizeMedium : Theme.fontSizeSmall
+                    font.pixelSize: (root.resultType === "Color" || root.resultType === "Timestamp" || root.resultType === "JSON") ? Theme.fontSizeMedium : Theme.fontSizeSmall
                     color: Theme.surfaceText
                     selectedTextColor: Theme.onPrimary
                     selectionColor: Theme.primary

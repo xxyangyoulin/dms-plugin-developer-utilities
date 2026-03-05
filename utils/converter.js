@@ -287,6 +287,48 @@ function process(input, settings) {
         }
     }
 
+    // JSON Escape/Unescape
+    if (enabledFeatures.enableJson) {
+        // Check if input is a JSON-escaped string (starts and ends with quotes)
+        if (trimmedInput.startsWith('"') && trimmedInput.endsWith('"') && trimmedInput.length >= 2) {
+            try {
+                var unescaped = JSON.parse(trimmedInput);
+                if (typeof unescaped === 'string' && unescaped !== trimmedInput.slice(1, -1)) {
+                    // Check if unescaped result is valid JSON for syntax highlighting
+                    var isUnescapedJson = false;
+                    var unescapedFormatted = unescaped;
+                    try {
+                        var unescapedParsed = JSON.parse(unescaped);
+                        if (typeof unescapedParsed === 'object') {
+                            isUnescapedJson = true;
+                            unescapedFormatted = JSON.stringify(unescapedParsed, null, 4);
+                        }
+                    } catch (e) {
+                        // Not a JSON object/array, keep original
+                    }
+                    results.push({
+                        type: "JSON",
+                        label: tr("JSON Unescape"),
+                        content: isUnescapedJson ? unescapedFormatted : unescaped,
+                        needHighlight: isUnescapedJson
+                    });
+                }
+            } catch (e) {
+                // Not a valid JSON string, ignore
+            }
+        }
+
+        // Try to escape the input as a JSON string
+        var escaped = JSON.stringify(input);
+        if (escaped !== '"' + input + '"' && escaped !== trimmedInput) {
+            results.push({
+                type: "JSON",
+                label: tr("JSON Escape"),
+                content: escaped
+            });
+        }
+    }
+
     if (enabledFeatures.enableJwt) {
         var jwtParts = trimmedInput.split('.');
         if (jwtParts.length === 3 && jwtParts.every(function(p) { return p.length > 0; })) {
