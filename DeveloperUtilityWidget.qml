@@ -17,9 +17,12 @@ PluginComponent {
     property var conversionResults: []
     property bool isProcessing: false
     property string statusMessage: ""
+    property var processingErrors: []
+    property bool jsonValid: false
     property string inputText: ""
-    property bool autoPaste: pluginData?.autoPaste ?? true
     property bool autoCloseOnCopy: pluginData?.autoCloseOnCopy ?? false
+    property bool showHistory: false
+    property var history: []
     property int flashIndex: -1
     property int expandedCardIndex: -1
 
@@ -37,6 +40,39 @@ PluginComponent {
 
     popoutHeight: parentScreen ? Math.floor(parentScreen.height * 0.8) : 600
 
+    onPluginServiceChanged: {
+        if (pluginService) {
+            history = pluginService.loadPluginState("developerUtilities", "history", [])
+        }
+    }
+
+    function addHistory(text) {
+        var updated = [text]
+        for (var i = 0; i < history.length && updated.length < 10; i++) {
+            if (history[i] !== text) {
+                updated.push(history[i])
+            }
+        }
+        history = updated
+        if (pluginService) {
+            pluginService.savePluginState("developerUtilities", "history", history)
+        }
+    }
+
+    function removeHistory(index) {
+        history = history.filter(function(_, i) { return i !== index })
+        if (pluginService) {
+            pluginService.savePluginState("developerUtilities", "history", history)
+        }
+    }
+
+    function clearHistory() {
+        history = []
+        if (pluginService) {
+            pluginService.savePluginState("developerUtilities", "history", history)
+        }
+    }
+
     function copyResult(index) {
         if (index >= 0 && index < root.conversionResults.length) {
             clipboardHelper.text = root.conversionResults[index].content
@@ -44,6 +80,7 @@ PluginComponent {
             clipboardHelper.copy()
             ToastService.showInfo(I18n.tr("Copied", "DeveloperUtilities") + ": " + root.conversionResults[index].label)
             root.flashIndex = index
+            root.addHistory(root.inputText)
             if (root.autoCloseOnCopy) {
                 root.copyCompletedForClose()
             }
@@ -109,6 +146,13 @@ PluginComponent {
                 }
 
                 DankActionButton {
+                    iconName: "history"
+                    iconColor: root.showHistory ? Theme.primary : Theme.surfaceVariantText
+                    iconSize: Theme.iconSize - 4
+                    onClicked: root.showHistory = !root.showHistory
+                }
+
+                DankActionButton {
                     iconName: "delete"
                     iconColor: Theme.surfaceVariantText
                     iconSize: Theme.iconSize - 4
@@ -128,23 +172,24 @@ PluginComponent {
                 }
             }
 
-            onVisibleChanged: {
-                if (visible) {
-                    inputArea.forceActiveFocus()
-                    if (root.autoPaste && inputArea.text.length === 0) {
-                        autoPasteTimer.start()
+            Connections {
+                target: popout.parentPopout
+                function onShouldBeVisibleChanged() {
+                    if (popout.parentPopout.shouldBeVisible) {
+                        focusInputTimer.restart()
+                    } else {
+                        root.expandedCardIndex = -1
                     }
-                } else {
-                    root.expandedCardIndex = -1
                 }
             }
 
             Timer {
-                id: autoPasteTimer
-                interval: 100
+                id: focusInputTimer
+                interval: 50
                 onTriggered: {
-                    if (inputArea.text.length === 0) {
-                        inputArea.paste()
+                    inputArea.forceActiveFocus()
+                    if (inputArea.text.length > 0) {
+                        inputArea.selectAll()
                     }
                 }
             }
@@ -172,14 +217,18 @@ PluginComponent {
                 }
             }
 
-            Column {
-                id: mainColumn
+            Row {
                 width: parent.width
-                leftPadding: Theme.spacingS
-                rightPadding: Theme.spacingS
-                topPadding: Theme.spacingM
-                bottomPadding: Theme.spacingL
                 spacing: Theme.spacingM
+
+                Column {
+                    id: mainColumn
+                    width: root.showHistory ? 720 : parent.width
+                    leftPadding: Theme.spacingS
+                    rightPadding: Theme.spacingS
+                    topPadding: Theme.spacingM
+                    bottomPadding: Theme.spacingL
+                    spacing: Theme.spacingM
 
                 Rectangle {
                     width: parent.width - Theme.spacingS * 2
@@ -223,13 +272,7 @@ PluginComponent {
                             }
                             background: Rectangle { color: "transparent" }
                             Keys.onPressed: event => {
-                                if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9 && (event.modifiers & Qt.ControlModifier)) {
-                                    let index = event.key - Qt.Key_1
-                                    if (index < root.conversionResults.length) {
-                                        root.copyResult(index)
-                                        event.accepted = true
-                                    }
-                                } else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
+                                if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
                                     if (inputArea.selectedText.length === 0 && root.conversionResults.length > 0) {
                                         root.copyResult(0)
                                         event.accepted = true
@@ -242,6 +285,8 @@ PluginComponent {
                                     root.conversionResults = []
                                     root.isProcessing = false
                                     root.statusMessage = ""
+                                    root.processingErrors = []
+                                    root.jsonValid = false
                                 } else {
                                     root.isProcessing = true
                                     debounceTimer.restart()
@@ -262,6 +307,17 @@ PluginComponent {
                             z: inputArea.z + 1
                         }
                     }
+                }
+
+                StyledText {
+                    width: parent.width - Theme.spacingS * 2
+                    visible: root.processingErrors.length > 0 || root.jsonValid
+                    text: root.processingErrors.length > 0
+                        ? root.processingErrors.map(function(error) { return error.message }).join("\n")
+                        : I18n.tr("Valid JSON", "DeveloperUtilities")
+                    color: root.processingErrors.length > 0 ? Theme.error : Theme.primary
+                    font.pixelSize: Theme.fontSizeSmall
+                    wrapMode: Text.WordWrap
                 }
 
                 DankFlickable {
@@ -292,7 +348,6 @@ PluginComponent {
                                     resultLabel: cardLoader.modelData.label
                                     resultContent: cardLoader.modelData.content
                                     needHighlight: cardLoader.modelData.needHighlight || false
-                                    shortcutIndex: cardLoader.index
                                     maxExpandHeight: root.popoutHeight - 200
 
                                     Binding {
@@ -306,6 +361,7 @@ PluginComponent {
                                         clipboardHelper.selectAll()
                                         clipboardHelper.copy()
                                         ToastService.showInfo(I18n.tr("Copied", "DeveloperUtilities"))
+                                        root.addHistory(root.inputText)
                                         copyCompleted()
                                         if (root.autoCloseOnCopy) {
                                             root.copyCompletedForClose()
@@ -432,6 +488,110 @@ PluginComponent {
                         }
                     }
                 }
+                }
+
+                Rectangle {
+                    width: parent.width - mainColumn.width - parent.spacing
+                    height: mainColumn.height
+                    visible: root.showHistory
+                    color: Theme.surfaceContainerHigh
+                    radius: Theme.cornerRadius
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingM
+                        spacing: Theme.spacingS
+
+                        RowLayout {
+                            width: parent.width
+
+                            StyledText {
+                                text: I18n.tr("History", "DeveloperUtilities") + " (" + root.history.length + "/10)"
+                                font.pixelSize: Theme.fontSizeMedium
+                                font.weight: Font.DemiBold
+                                color: Theme.surfaceText
+                                Layout.fillWidth: true
+                            }
+
+                            DankActionButton {
+                                id: clearHistoryButton
+                                enabled: root.history.length > 0
+                                iconName: "delete_sweep"
+                                iconColor: Theme.error
+                                iconSize: Theme.iconSize - 6
+                                onClicked: root.clearHistory()
+                            }
+                        }
+
+                        StyledText {
+                            width: parent.width
+                            visible: root.history.length === 0
+                            text: I18n.tr("No history", "DeveloperUtilities")
+                            horizontalAlignment: Text.AlignHCenter
+                            color: Theme.surfaceVariantText
+                        }
+
+                        DankFlickable {
+                            width: parent.width
+                            height: parent.height - y
+                            visible: root.history.length > 0
+                            clip: true
+                            contentWidth: width
+                            contentHeight: historyColumn.implicitHeight
+
+                            Column {
+                                id: historyColumn
+                                width: parent.width
+                                spacing: Theme.spacingS
+
+                                Repeater {
+                                    model: root.history
+
+                                    Rectangle {
+                                        required property string modelData
+                                        required property int index
+                                        width: historyColumn.width
+                                        height: 56
+                                        radius: Theme.cornerRadius
+                                        color: historyMouseArea.containsMouse ? Theme.surfaceContainerHighest : Theme.surfaceContainer
+
+                                        StyledText {
+                                            anchors.left: parent.left
+                                            anchors.right: deleteHistoryButton.left
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.margins: Theme.spacingM
+                                            text: modelData.replace(/\s+/g, " ")
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 2
+                                            wrapMode: Text.Wrap
+                                            color: Theme.surfaceText
+                                        }
+
+                                        MouseArea {
+                                            id: historyMouseArea
+                                            anchors.fill: parent
+                                            anchors.rightMargin: deleteHistoryButton.width
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: inputArea.text = modelData
+                                        }
+
+                                        DankActionButton {
+                                            id: deleteHistoryButton
+                                            anchors.right: parent.right
+                                            anchors.rightMargin: Theme.spacingS
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            iconName: "delete"
+                                            iconColor: Theme.error
+                                            iconSize: Theme.iconSize - 6
+                                            onClicked: root.removeHistory(index)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -442,6 +602,8 @@ PluginComponent {
         onTriggered: {
             var result = Converter.process(root.inputText, root.enabledFeatures)
             root.conversionResults = result.results
+            root.processingErrors = result.error ? [{ message: result.error }] : result.errors
+            root.jsonValid = result.jsonValid || false
             root.isProcessing = false
             root.statusMessage = result.results.length > 0 ? result.results.length + " conversions" : ""
         }
@@ -452,5 +614,5 @@ PluginComponent {
         visible: false
     }
 
-    popoutWidth: 480
+    popoutWidth: root.showHistory ? 1040 : 720
 }

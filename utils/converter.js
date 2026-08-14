@@ -25,6 +25,18 @@ function truncateOutput(text, maxLength) {
     return text.substring(0, maxLength) + "\n\n... [" + tr("Output truncated") + "]";
 }
 
+function hasUnsafeJsonInteger(input) {
+    var withoutStrings = input.replace(/"(?:\\.|[^"\\])*"/g, '""');
+    var numbers = withoutStrings.match(/-?\d{16,}/g) || [];
+    for (var i = 0; i < numbers.length; i++) {
+        var digits = numbers[i].replace(/^-/, '').replace(/^0+/, '') || '0';
+        if (digits.length > 16 || (digits.length === 16 && digits > "9007199254740991")) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function isValidBase64(str) {
     if (!/^[A-Za-z0-9+/]+=*$/.test(str)) return false;
     if (str.length % 4 !== 0) return false;
@@ -233,12 +245,14 @@ function processColor(input, results) {
 
 function process(input, settings) {
     if (!input || input.trim() === "") {
-        return { results: [], error: null, truncated: false };
+        return { results: [], errors: [], error: null, jsonValid: false, truncated: false };
     }
 
     var trimmedInput = input.trim();
     var results = [];
     var errors = [];
+    var jsonValid = false;
+    var jsonHasUnsafeInteger = false;
 
     var enabledFeatures = settings || {
         enableColor: true,
@@ -253,7 +267,9 @@ function process(input, settings) {
     if (input.length > CONFIG.MAX_INPUT_LENGTH) {
         return {
             results: [],
+            errors: [],
             error: tr("Input too long") + " (" + input.length + " " + tr("chars") + "). " + tr("Max") + ": " + CONFIG.MAX_INPUT_LENGTH,
+            jsonValid: false,
             truncated: true
         };
     }
@@ -265,22 +281,26 @@ function process(input, settings) {
     if (enabledFeatures.enableJson && (trimmedInput.startsWith("{") || trimmedInput.startsWith("["))) {
         try {
             var parsed = JSON.parse(trimmedInput);
-            var formatted = JSON.stringify(parsed, null, 4);
-            if (formatted !== trimmedInput) {
+            jsonValid = true;
+            jsonHasUnsafeInteger = hasUnsafeJsonInteger(trimmedInput);
+            if (jsonHasUnsafeInteger) {
+                errors.push({ type: "JSON", message: tr("JSON contains an integer outside the safe range") });
+            } else {
+                var formatted = JSON.stringify(parsed, null, 1);
                 results.push({
                     type: "JSON",
                     label: tr("JSON Format"),
                     content: formatted,
                     needHighlight: true
                 });
-            }
-            var compressed = JSON.stringify(parsed);
-            if (compressed !== trimmedInput && compressed !== formatted) {
-                results.push({
-                    type: "JSON",
-                    label: tr("JSON Minify"),
-                    content: compressed
-                });
+                var compressed = JSON.stringify(parsed);
+                if (compressed !== trimmedInput && compressed !== formatted) {
+                    results.push({
+                        type: "JSON",
+                        label: tr("JSON Minify"),
+                        content: compressed
+                    });
+                }
             }
         } catch (e) {
             errors.push({ type: "JSON", message: tr("JSON parse failed") + ": " + e.message });
@@ -289,11 +309,13 @@ function process(input, settings) {
 
     // JSON Escape/Unescape
     if (enabledFeatures.enableJson) {
-        // Check if input is a JSON-escaped string (starts and ends with quotes)
-        if (trimmedInput.startsWith('"') && trimmedInput.endsWith('"') && trimmedInput.length >= 2) {
+        var wasJsonUnescaped = false;
+        if (!jsonHasUnsafeInteger && trimmedInput.includes('\\')) {
             try {
-                var unescaped = JSON.parse(trimmedInput);
-                if (typeof unescaped === 'string' && unescaped !== trimmedInput.slice(1, -1)) {
+                var hasOuterQuotes = trimmedInput.startsWith('"') && trimmedInput.endsWith('"') && trimmedInput.length >= 2;
+                var unescapedInput = hasOuterQuotes ? trimmedInput : '"' + trimmedInput.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"';
+                var unescaped = JSON.parse(unescapedInput);
+                if (typeof unescaped === 'string' && unescaped !== trimmedInput) {
                     // Check if unescaped result is valid JSON for syntax highlighting
                     var isUnescapedJson = false;
                     var unescapedFormatted = unescaped;
@@ -301,7 +323,7 @@ function process(input, settings) {
                         var unescapedParsed = JSON.parse(unescaped);
                         if (typeof unescapedParsed === 'object') {
                             isUnescapedJson = true;
-                            unescapedFormatted = JSON.stringify(unescapedParsed, null, 4);
+                            unescapedFormatted = JSON.stringify(unescapedParsed, null, 1);
                         }
                     } catch (e) {
                         // Not a JSON object/array, keep original
@@ -312,19 +334,43 @@ function process(input, settings) {
                         content: isUnescapedJson ? unescapedFormatted : unescaped,
                         needHighlight: isUnescapedJson
                     });
+                    wasJsonUnescaped = true;
                 }
             } catch (e) {
                 // Not a valid JSON string, ignore
             }
         }
 
-        // Try to escape the input as a JSON string
-        var escaped = JSON.stringify(input);
-        if (escaped !== '"' + input + '"' && escaped !== trimmedInput) {
+        var escapeSource = typeof compressed === 'string' ? compressed : input;
+        var escaped = JSON.stringify(escapeSource).slice(1, -1);
+        if (!jsonHasUnsafeInteger && !wasJsonUnescaped && escaped !== input && escaped !== trimmedInput) {
             results.push({
                 type: "JSON",
                 label: tr("JSON Escape"),
                 content: escaped
+            });
+        }
+
+        if (/\\u[0-9a-fA-F]{4}/.test(input)) {
+            results.push({
+                type: "JSON",
+                label: tr("Unicode to Text"),
+                content: input.replace(/\\u([0-9a-fA-F]{4})/g, function(_, hex) {
+                    return String.fromCharCode(parseInt(hex, 16));
+                })
+            });
+        }
+
+        if (/[^\x00-\x7F]/.test(input)) {
+            var unicodeEncoded = "";
+            for (var unicodeIndex = 0; unicodeIndex < input.length; unicodeIndex++) {
+                var code = input.charCodeAt(unicodeIndex);
+                unicodeEncoded += code > 127 ? "\\u" + ("0000" + code.toString(16)).slice(-4) : input[unicodeIndex];
+            }
+            results.push({
+                type: "JSON",
+                label: tr("Text to Unicode"),
+                content: unicodeEncoded
             });
         }
     }
@@ -343,8 +389,8 @@ function process(input, settings) {
                 var decodedPayload = Qt.atob(payloadB64);
                 var jsonPayload = JSON.parse(decodedPayload);
 
-                var headerFormatted = JSON.stringify(jsonHeader, null, 4);
-                var payloadFormatted = JSON.stringify(jsonPayload, null, 4);
+                var headerFormatted = JSON.stringify(jsonHeader, null, 1);
+                var payloadFormatted = JSON.stringify(jsonPayload, null, 1);
                 var jwtContent = "=== " + tr("Header") + " ===\n" + headerFormatted +
                                "\n\n=== " + tr("Payload") + " ===\n" + payloadFormatted;
                 results.push({
@@ -524,6 +570,7 @@ function process(input, settings) {
     return {
         results: results,
         errors: errors,
+        jsonValid: jsonValid,
         truncated: false,
         config: CONFIG
     };

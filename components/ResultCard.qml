@@ -13,7 +13,6 @@ Rectangle {
     property bool needHighlight: false
     property bool expanded: true
     property bool isFullyExpanded: false
-    property int shortcutIndex: -1
     property int maxExpandHeight: 500
 
     signal copyRequested()
@@ -260,25 +259,6 @@ Rectangle {
                     Layout.fillWidth: true
                 }
 
-                Rectangle {
-                    visible: root.shortcutIndex >= 0 && root.shortcutIndex < 9
-                    width: shortcutText.implicitWidth + Theme.spacingS
-                    height: 20
-                    radius: 4
-                    color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.12)
-                    border.width: 1
-                    border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.3)
-
-                    StyledText {
-                        id: shortcutText
-                        anchors.centerIn: parent
-                        text: "Ctrl+" + (root.shortcutIndex + 1)
-                        font.pixelSize: Theme.fontSizeSmall - 2
-                        font.weight: Font.Medium
-                        color: root.accentColor
-                    }
-                }
-
                 DankActionButton {
                     id: expandButton
                     visible: root.needsExpand
@@ -369,8 +349,9 @@ Rectangle {
                     readOnly: true
                     selectByMouse: true
                     wrapMode: TextEdit.WrapAnywhere
-                    font.family: "Monospace"
+                    font.family: "JetBrains Mono"
                     font.pixelSize: (root.resultType === "Color" || root.resultType === "Timestamp" || root.resultType === "JSON") ? Theme.fontSizeMedium : Theme.fontSizeSmall
+                    font.bold: true
                     color: Theme.surfaceText
                     selectedTextColor: Theme.onPrimary
                     selectionColor: Theme.primary

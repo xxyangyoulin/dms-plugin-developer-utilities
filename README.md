@@ -27,7 +27,6 @@ Encoders, decoders, formatters and converters for developers.
 
 ## Configuration
 
-- **Auto Paste**: Automatically paste clipboard content when opening.
 - **Feature Toggles**: Enable/disable individual conversion types.
 
 ## Permissions

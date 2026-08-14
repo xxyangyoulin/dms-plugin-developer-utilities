@@ -32,13 +32,6 @@ PluginSettings {
     }
 
     ToggleSetting {
-        settingKey: "autoPaste"
-        label: I18n.tr("Auto Paste", "DeveloperUtilities")
-        description: I18n.tr("Automatically paste clipboard content when opening", "DeveloperUtilities")
-        defaultValue: true
-    }
-
-    ToggleSetting {
         settingKey: "autoCloseOnCopy"
         label: I18n.tr("Auto Close on Copy", "DeveloperUtilities")
         description: I18n.tr("Automatically close popup after copying result", "DeveloperUtilities")
@@ -135,7 +128,7 @@ PluginSettings {
             }
 
             StyledText {
-                text: I18n.tr("• Ctrl+1~9 - Copy result by index\n• Ctrl+C - Copy first result when no text selected\n• Shortcut hints shown on result card headers", "DeveloperUtilities")
+                text: I18n.tr("• Ctrl+C - Copy first result when no text selected", "DeveloperUtilities")
                 font.pixelSize: Theme.fontSizeSmall
                 color: Theme.surfaceVariantText
                 width: parent.width
