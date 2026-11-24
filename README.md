@@ -9,7 +9,7 @@ Encoders, decoders, formatters and converters for developers.
 - **Color Conversion**: HEX, RGB, HSL color format conversion with live preview.
 - **JSON Format**: Auto-detect and beautify/minify JSON with syntax highlighting.
 - **JWT Decode**: Parse JWT header and payload.
-- **Timestamp**: Unix timestamp to date conversion and vice versa.
+- **Timestamp**: Unix timestamp to date conversion and vice versa; get the current timestamp in seconds and milliseconds.
 - **URL Encode/Decode**: Handle URL encoded strings.
 - **Base64 Encode/Decode**: Auto-detect and convert Base64.
 - **Number Base Conversion**: Binary, Octal, Decimal, Hexadecimal.
@@ -19,6 +19,8 @@ Encoders, decoders, formatters and converters for developers.
 1. Open the widget from your status bar.
 2. Paste or type text into the input area.
 3. Results appear automatically with conversion options.
+
+Click the clock button in the header to get the current Unix timestamp in seconds and milliseconds, then copy either result. Click again to refresh.
 
 ## Keyboard Shortcuts
 

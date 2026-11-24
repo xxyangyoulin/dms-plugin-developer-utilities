@@ -146,6 +146,36 @@ PluginComponent {
                 }
 
                 DankActionButton {
+                    iconName: "schedule"
+                    iconColor: Theme.surfaceVariantText
+                    iconSize: Theme.iconSize - 4
+                    tooltipText: I18n.tr("Current Unix timestamp", "DeveloperUtilities")
+                    visible: root.enabledFeatures.enableTimestamp
+                    onClicked: {
+                        var now = Date.now()
+                        inputArea.text = new Date(now).toISOString()
+                        debounceTimer.stop()
+                        root.isProcessing = false
+                        root.processingErrors = []
+                        root.jsonValid = false
+                        root.expandedCardIndex = -1
+                        root.conversionResults = [
+                            {
+                                type: "Timestamp",
+                                label: I18n.tr("Current Unix timestamp (sec)", "DeveloperUtilities"),
+                                content: Math.floor(now / 1000).toString()
+                            },
+                            {
+                                type: "Timestamp",
+                                label: I18n.tr("Current Unix timestamp (ms)", "DeveloperUtilities"),
+                                content: now.toString()
+                            }
+                        ]
+                        root.statusMessage = ""
+                    }
+                }
+
+                DankActionButton {
                     iconName: "history"
                     iconColor: root.showHistory ? Theme.primary : Theme.surfaceVariantText
                     iconSize: Theme.iconSize - 4
